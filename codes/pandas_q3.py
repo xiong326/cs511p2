@@ -16,7 +16,26 @@ import util.judge_df_equal
 
 def pandas_q3(segment: str, customer: pd.DataFrame, orders: pd.DataFrame, lineitem: pd.DataFrame) -> pd.DataFrame:
     #TODO: your codes begin
-    return pd.DataFrame()
+    orders['o_orderdate'] = pd.to_datetime(orders['o_orderdate'])
+    lineitem['l_shipdate'] = pd.to_datetime(lineitem['l_shipdate'])
+    
+    filtered_customer = customer[customer['c_mktsegment'] == segment]
+    
+    joined_df = pd.merge(filtered_customer, orders, left_on='c_custkey', right_on='o_custkey')
+    joined_df = pd.merge(joined_df, lineitem, left_on='o_orderkey', right_on='l_orderkey')
+    
+    # filter based on order and ship dates
+    date_filtered_df = joined_df[
+        (joined_df['o_orderdate'] < pd.to_datetime('1995-03-15')) & 
+        (joined_df['l_shipdate'] > pd.to_datetime('1995-03-15'))
+    ]
+    
+    # group by, calculate revenue, and sort
+    result_df = date_filtered_df.groupby(['l_orderkey', 'o_orderdate', 'o_shippriority']).agg(
+        revenue=('l_extendedprice', lambda x: (x * (1 - date_filtered_df.loc[x.index, 'l_discount'])).sum())
+    ).reset_index().sort_values(by=['revenue', 'o_orderdate'], ascending=[False, True]).head(10)
+    
+    return result_df
     #end of your codes
 
 

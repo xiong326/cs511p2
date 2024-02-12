@@ -15,7 +15,25 @@ import util.judge_df_equal
 
 def pandas_q4(time: str, orders: pd.DataFrame, lineitem: pd.DataFrame) -> pd.DataFrame:
     #TODO: your codes begin
-    return pd.DataFrame()
+    start_time = pd.to_datetime(time)
+    end_time = start_time + pd.DateOffset(months=3)
+    orders['o_orderdate'] = pd.to_datetime(orders['o_orderdate'])
+    lineitem['l_commitdate'] = pd.to_datetime(lineitem['l_commitdate'])
+    lineitem['l_receiptdate'] = pd.to_datetime(lineitem['l_receiptdate'])
+    
+    filtered_orders = orders[(orders['o_orderdate'] >= start_time) & (orders['o_orderdate'] < end_time)]
+    
+    valid_lineitems = lineitem[lineitem['l_commitdate'] < lineitem['l_receiptdate']]
+    
+    # find orders that have matching lineitems satisfying the condition
+    valid_orders_keys = valid_lineitems['l_orderkey'].unique()
+    valid_orders = filtered_orders[filtered_orders['o_orderkey'].isin(valid_orders_keys)]
+    
+    # group by o_orderpriority, count, and order by o_orderpriority
+    result = valid_orders.groupby('o_orderpriority').size().reset_index(name='order_count')
+    result = result.sort_values(by='o_orderpriority')
+    
+    return result
     #end of your codes
 
 

@@ -8,11 +8,30 @@
 import pandas as pd
 import ray
 import typing
+import time as tm
 
 
 def pandas_q1(time: str, lineitem:pd.DataFrame) -> float:
     # TODO: your codes begin
-    return -1
+
+    start_date = pd.to_datetime(time, format='%Y-%m-%d')
+    end_date = start_date + pd.DateOffset(years=1)
+
+    lineitem['l_shipdate'] = pd.to_datetime(lineitem['l_shipdate'])
+    
+    # filter the DataFrame based on the specified conditions
+    filtered_df = lineitem[
+        (lineitem['l_shipdate'] >= start_date) &
+        (lineitem['l_shipdate'] < end_date) &
+        (lineitem['l_discount'] >= 0.05) & 
+        (lineitem['l_discount'] <= 0.070001) &
+        (lineitem['l_quantity'] < 24)
+    ]
+    
+    # calculate the revenue
+    revenue = (filtered_df['l_extendedprice'] * filtered_df['l_discount']).sum()
+    
+    return revenue
     # end of your codes
 
 

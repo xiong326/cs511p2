@@ -10,10 +10,43 @@ import ray
 import typing
 import numpy as np
 
+ray.shutdown()
+ray.init()
+
+@ray.remote
+def process_chunk(chunk):
+    # Convert shipdate to datetime format within the chunk
+    chunk['l_shipdate'] = pd.to_datetime(chunk['l_shipdate'])
+    
+    # filter the chunk based on the conditions
+    filtered_chunk = chunk[
+        (chunk['l_shipdate'] >= start_date) &
+        (chunk['l_shipdate'] < end_date) &
+        (chunk['l_discount'] >= 0.05) & 
+        (chunk['l_discount'] <= 0.070001) &
+        (chunk['l_quantity'] < 24)
+    ]
+    
+    # calculate and return the revenue for this chunk
+    return (filtered_chunk['l_extendedprice'] * filtered_chunk['l_discount']).sum()
+
 
 def ray_q1(time: str, lineitem:pd.DataFrame) -> float:
     # TODO: your codes begin
-    return -1
+    global start_date, end_date
+    start_date = pd.to_datetime(time, format='%Y-%m-%d')
+    end_date = start_date + pd.DateOffset(years=1)
+    
+    # split the DataFrame into chunks
+    chunks = np.array_split(lineitem, 4)
+
+    # process chunks in parallel
+    tasks = [process_chunk.remote(chunk) for chunk in chunks]
+    
+    # gather and sum up the results
+    revenue = sum(ray.get(tasks))
+    
+    return revenue
     # end of your codes
 
 

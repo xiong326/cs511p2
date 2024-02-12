@@ -10,13 +10,63 @@ import tempfile
 import pandas as pd
 import ray
 import typing
+import numpy as np
 
 import util.judge_df_equal
+
+ray.shutdown()
+ray.init()
+
+@ray.remote
+def process_chunk(customer, order_chunk, lineitem_chunk):
+    # ensure column is converted to date
+    order_chunk['o_orderdate'] = pd.to_datetime(order_chunk['o_orderdate'])
+    lineitem_chunk['l_shipdate'] = pd.to_datetime(lineitem_chunk['l_shipdate'])
+
+    # filter before join
+    filtered_order = order_chunk[order_chunk['o_orderdate'] < pd.to_datetime('1995-03-15')]
+    filtered_lineitem = lineitem_chunk[lineitem_chunk['l_shipdate'] > pd.to_datetime('1995-03-15')]
+    
+    # join
+    joined_df = pd.merge(customer, filtered_order, left_on='c_custkey', right_on='o_custkey')
+    joined_df = pd.merge(joined_df, filtered_lineitem, left_on='o_orderkey', right_on='l_orderkey')
+    
+    # group by, calculate revenue, and sort
+    result_df = joined_df.groupby(['l_orderkey', 'o_orderdate', 'o_shippriority']).agg(
+        revenue=('l_extendedprice', lambda x: (x * (1 - joined_df.loc[x.index, 'l_discount'])).sum())
+    ).reset_index()
+    
+    return result_df
 
 
 def ray_q3(segment: str, customer: pd.DataFrame, orders: pd.DataFrame, lineitem: pd.DataFrame) -> pd.DataFrame:
     #TODO: your codes begin
-    return pd.DataFrame()
+    # filter the customer first
+    filtered_customer = customer[customer['c_mktsegment'] == segment]
+
+    # split order and lineitem into chunks
+    order_chunks = np.array_split(orders, 2)
+    lineitem_chunks = np.array_split(lineitem, 2)
+
+    # compute cross join idx
+    cross = []
+    for i in range(len(order_chunks)):
+        for j in range(len(lineitem_chunks)):
+            cross.append((i, j))
+
+    # start ray tasks
+    tasks = [process_chunk.remote(filtered_customer, order_chunks[i], lineitem_chunks[j]) for (i, j) in cross]
+    results = ray.get(tasks)
+    
+    # Combine the results
+    final_df = pd.concat(results)
+
+    # do another group by to output final results
+    final_df = final_df.groupby(['l_orderkey', 'o_orderdate', 'o_shippriority']).agg(
+        revenue=('revenue', 'sum')
+    ).reset_index().sort_values(by=['revenue', 'o_orderdate'], ascending=[False, True]).head(10)
+
+    return final_df
     #end of your codes
 
 

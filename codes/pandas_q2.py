@@ -14,7 +14,30 @@ import tempfile
 
 def pandas_q2(timediff:int, lineitem:pd.DataFrame) -> pd.DataFrame:
     #TODO: your codes begin
-    return pd.DataFrame()
+    last_day = pd.to_datetime('1998-12-01') - pd.DateOffset(days=timediff)
+
+    # ensure column is converted to date
+    lineitem['l_shipdate'] = pd.to_datetime(lineitem['l_shipdate'])
+    
+    # filter the DataFrame
+    filtered_df = lineitem[lineitem['l_shipdate'] <= last_day]
+    
+    # group by l_returnflag and l_linestatus and calculate the aggregates
+    result_df = filtered_df.groupby(['l_returnflag', 'l_linestatus']).agg(
+        sum_qty=('l_quantity', 'sum'),
+        sum_base_price=('l_extendedprice', 'sum'),
+        sum_disc_price=('l_extendedprice', lambda x: (x * (1 - filtered_df.loc[x.index, 'l_discount'])).sum()),
+        sum_charge=('l_extendedprice', lambda x: (x * (1 - filtered_df.loc[x.index, 'l_discount']) * (1 + filtered_df.loc[x.index, 'l_tax'])).sum()),
+        avg_qty=('l_quantity', 'mean'),
+        avg_price=('l_extendedprice', 'mean'),
+        avg_disc=('l_discount', 'mean'),
+        count_order=('l_orderkey', 'count')
+    ).reset_index()
+    
+    # order by l_returnflag and l_linestatus
+    result_df = result_df.sort_values(by=['l_returnflag', 'l_linestatus'])
+    
+    return result_df
     #end of your codes
 
 
